@@ -1,17 +1,26 @@
 ---
-name: odoo-18-module-development
-description: Use when developing Odoo 18.0 modules, creating ERP extensions, or troubleshooting module loading issues
+name: odoo
+description: Use when developing Odoo modules (any version 14.0-19.0), creating ERP extensions, debugging issues, or working with OWL components
 ---
 
-# Odoo 18.0 模块开发
+# Odoo Development Skill
 
-## Overview
+A comprehensive Odoo development reference covering versions 14.0-19.0, including module development, debugging, API patterns, and best practices.
 
-基于 Odoo 18.0 的模块开发规范和常见问题解决方案。
+## Version Support
 
-## Odoo 18.0 核心规范
+| Odoo Version | Python | PostgreSQL | LTS | Status |
+|--------------|--------|------------|-----|--------|
+| 14.0 | 3.8 | 12 | No | Maintenance |
+| 15.0 | 3.9 | 13 | No | Maintenance |
+| 16.0 | 3.10 | 14 | No | Maintenance |
+| 17.0 | 3.10 | 14 | Yes | LTS until 2034 |
+| **18.0** | **3.11** | **15** | **No** | **Stable** |
+| 19.0 | 3.11+ | 15+ | Yes | Latest LTS |
 
-### 视图语法变化
+## Odoo 18.0+ 核心规范
+
+### 视图语法
 ```xml
 <!-- Odoo 17+ 使用 list 替代 tree -->
 <list string="客户列表">
@@ -20,9 +29,8 @@ description: Use when developing Odoo 18.0 modules, creating ERP extensions, or 
 ```
 
 ### 不使用的废弃功能
-- chatter（讨论功能）
-- `mail.thread` 基类（除非明确需要）
 - `<tree>` 标签（使用 `<list>`）
+- `mail.thread` 基类（除非明确需要）
 
 ### 外部ID引用规则
 
@@ -44,41 +52,40 @@ description: Use when developing Odoo 18.0 modules, creating ERP extensions, or 
 module_name/
 ├── __manifest__.py              # 模块清单（必需）
 ├── models/
-│   ├── __init__.py              # 模型入口（必需）
-│   └── your_model.py            # 模型定义
+│   ├── __init__.py            # 模型入口（必需）
+│   └── your_model.py          # 模型定义
 ├── views/
-│   ├── your_model_views.xml     # 视图定义
-│   └── menus.xml                # 菜单（最后加载）
+│   ├── your_model_views.xml   # 视图定义
+│   └── menus.xml              # 菜单（最后加载）
 ├── data/
-│   └── demo.xml                 # 演示数据
+│   └── demo.xml               # 演示数据
 ├── security/
-│   ├── ir.model.access.csv      # 已有模型权限
-│   └── ir.model.access.new.csv  # 新模型权限（后加载）
+│   ├── ir.model.access.csv    # 已有模型权限
+│   └── ir.model.access.new.csv # 新模型权限（后加载）
 └── static/
     └── description/
-        └── icon.png             # 模块图标
+        └── icon.png           # 模块图标
 ```
 
 ## `__manifest__.py` 正确结构
 
 ```python
 {
-    'name': "Module Name",
-    'version': '1.0',
+    'name': 'My Odoo Module',
+    'version': '18.0.1.0.0',
     'category': 'Industry',
-    'author': 'Your Name',
+    'author': 'Your Company',
     'license': 'LGPL-3',
     'depends': ['base'],
     'data': [
-        # 已有模型的权限
+        # 已有模型权限
         'security/ir.model.access.csv',
         'security/security.xml',
         # 数据文件
         'data/demo.xml',
         # 视图文件按依赖顺序
-        'views/ps_basic_views.xml',
-        'views/ps_sale_views.xml',
-        # ... 其他视图
+        'views/parent_views.xml',
+        'views/child_views.xml',
         # 菜单必须最后加载
         'views/menus.xml',
         # 新模型权限必须放在 menus.xml 之后
@@ -104,46 +111,54 @@ access_your_new_model_user,your.new.model.user,model_your_new_model,base.group_u
 
 **错误做法**: 直接在原 ir.model.access.csv 中添加，会导致 "Missing required value for the field 'Model'" 错误。
 
-## `__init__.py` 模板
-
-```python
-# models/__init__.py
-from . import your_model
-
-# 如果有子模块
-from . import sub_module
-```
-
 ## 模型定义模板
 
 ```python
-# models/your_model.py
-from odoo import models, fields, api
+from odoo import models, fields, api, _
+from odoo.exceptions import ValidationError
 
 class ModelName(models.Model):
-    _name = 'your.model'
+    _name = 'module.name'
     _description = '模型描述'
     _order = 'name'
 
-    name = fields.Char(string='名称', required=True)
+    name = fields.Char(string='名称', required=True, index=True)
     code = fields.Char(string='编码', index=True)
     active = fields.Boolean(string='启用', default=True)
     
-    # Many2one 示例
+    # 关系字段
     partner_id = fields.Many2one('res.partner', string='合作伙伴')
+    line_ids = fields.One2many('module.line', 'main_id', string='明细')
     
     # 计算字段
-    total_amount = fields.Float(string='总金额', compute='_compute_total')
+    total_amount = fields.Monetary(
+        string='总金额',
+        compute='_compute_total',
+        store=True,
+        currency_field='currency_id',
+    )
+    currency_id = fields.Many2one('res.currency', string='货币',
+        default=lambda self: self.env.company.currency_id)
     
     # SQL 约束
     _sql_constraints = [
         ('code_unique', 'unique(code)', '编码不能重复!'),
     ]
 
-    @api.depends('price', 'quantity')
+    @api.depends('line_ids.amount')
     def _compute_total(self):
         for rec in self:
-            rec.total_amount = (rec.price or 0) * (rec.quantity or 0)
+            rec.total_amount = sum(rec.line_ids.mapped('amount'))
+
+    @api.constrains('code')
+    def _check_code(self):
+        for rec in self:
+            if rec.code and len(rec.code) < 3:
+                raise ValidationError(_('编码长度不能少于3位'))
+
+    def action_confirm(self):
+        self.write({'state': 'confirmed'})
+        return True
 ```
 
 ## 视图定义模板
@@ -157,6 +172,7 @@ class ModelName(models.Model):
         <list>
             <field name="name"/>
             <field name="code"/>
+            <field name="state"/>
             <field name="active"/>
         </list>
     </field>
@@ -170,6 +186,10 @@ class ModelName(models.Model):
     <field name="model">your.model</field>
     <field name="arch" type="xml">
         <form>
+            <header>
+                <button name="action_confirm" type="object" string="确认" class="btn-primary"/>
+                <field name="state" widget="statusbar"/>
+            </header>
             <sheet>
                 <group>
                     <group string="基本信息">
@@ -181,6 +201,9 @@ class ModelName(models.Model):
                     </group>
                 </group>
                 <notebook>
+                    <page string="明细" name="lines">
+                        <field name="line_ids"/>
+                    </page>
                     <page string="备注" name="remark">
                         <field name="remark"/>
                     </page>
@@ -210,18 +233,45 @@ class ModelName(models.Model):
           sequence="10"/>
 ```
 
-## 安全权限 CSV
+## OWL 2.0 前端开发 (Odoo 19.0)
 
-### 已有模型（ir.model.access.csv）
-```csv
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_your_model_user,your.model.user,model_your_model,base.group_user,1,1,1,1
-```
+```javascript
+/** @odoo-module **/
+import { Component, useState, onMounted } from "@odoo/owl";
+import { useService } from "@web/core/utils/hooks";
 
-### 新模型（ir.model.access.new.csv）
-```csv
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_your_new_model_user,your.new.model.user,model_your_new_model,base.group_user,1,1,1,1
+export class MyComponent extends Component {
+    static template = "module_name.MyComponent";
+    static props = {
+        record: { type: Object, optional: true },
+    };
+
+    setup() {
+        this.orm = useService("orm");
+        this.notification = useService("notification");
+        this.state = useState({
+            data: [],
+            isLoading: false,
+        });
+    }
+
+    async onWillStart() {
+        await this.loadData();
+    }
+
+    async loadData() {
+        this.state.isLoading = true;
+        try {
+            this.state.data = await this.orm.searchRead(
+                this.props.record.resModel,
+                [['id', '=', this.props.record.resId]],
+                ['name', 'state']
+            );
+        } finally {
+            this.state.isLoading = false;
+        }
+    }
+}
 ```
 
 ## 常见问题与解决方案
@@ -231,7 +281,7 @@ access_your_new_model_user,your.new.model.user,model_your_new_model,base.group_u
 **原因**: 对应目录缺少 `__init__.py`
 **解决**: 创建 `models/subdir/__init__.py`
 
-### 问题2: ir.model.access.csv 模型找不到 ⚠️ 核心问题
+### 问题2: ir.model.access.csv 模型找不到 ⚠️
 **症状**: 
 ```
 Missing required value for the field 'Model' (model_id)
@@ -257,42 +307,18 @@ Missing required value for the field 'Model' (model_id)
 2. 确认字段在模型中存在
 3. 查看 Odoo 日志
 
-### 问题5: 权限不足
-**症状**: 操作被拒绝
-**原因**: `ir.model.access.csv` 未正确配置
-**解决**: 添加正确的权限记录（注意加载顺序）
-
-## 调试命令
-
-```bash
-# 升级模块
-./odoo-bin -u your_module -d your_database
-
-# 以开发者模式启动
-./odoo-bin -d your_database --dev=all
-
-# 查看已安装模块
-./odoo-bin -u base -d your_database --stop-after-init
-```
-
 ## Firebird 数据库集成
 
-### 连接配置
 ```python
 import fdb
 
-con = fdb.connect(
-    host='localhost',
-    database='/path/to/database.fdb',
-    user='sysdba',
-    password='masterkey'
-)
-```
-
-### 导入数据到 Odoo
-```python
 def import_from_firebird(self):
-    fb_con = fdb.connect(...)
+    fb_con = fdb.connect(
+        host='localhost',
+        database='/path/to/database.fdb',
+        user='sysdba',
+        password='masterkey'
+    )
     cursor = fb_con.cursor()
     
     cursor.execute("SELECT * FROM CUSTOMERS")
@@ -306,10 +332,10 @@ def import_from_firebird(self):
     fb_con.close()
 ```
 
-## Odoo 18.0 绿色版路径
+## 本地开发路径
 
 ```
-D:\GOdoo18_CE_20250305
+Odoo 18.0 绿色版: D:\GOdoo18_CE_20250305
 ```
 
 ## 开发工作流
