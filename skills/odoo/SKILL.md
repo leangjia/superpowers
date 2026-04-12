@@ -336,6 +336,71 @@ def import_from_firebird(self):
 
 ```
 Odoo 18.0 绿色版: D:\GOdoo18_CE_20250305
+开发源目录: D:\纸箱ERP功能模块\architecture-a-single-module
+模块名: l10n_cn_carton_erp
+```
+
+## 纸箱ERP模块开发规范
+
+### 模块基本信息
+```python
+{
+    'name': 'Carton ERP - All-in-One',
+    'name zh_CN': '纸箱ERP全业务模块(单一)',
+    'version': '1.0.0',
+    'category': 'Industry',
+    'author': '老天@odoo123.com,开源之家',
+    'website': 'https://www.odoo123.com',
+    'license': 'LGPL-3',
+}
+```
+
+### 明细行模型注意事项 ⚠️
+
+**避免使用 related 字段获取父记录字段**，因为 new record 时会返回 `_unknown` 对象：
+
+```python
+# ❌ 错误 - 会导致 _unknown 错误
+currency_id = fields.Many2one('res.currency', related='order_id.currency_id')
+
+# ✅ 正确 - 使用 compute 字段
+currency_id = fields.Many2one('res.currency', compute='_compute_currency', store=True)
+
+@api.depends('order_id.currency_id')
+def _compute_currency(self):
+    for rec in self:
+        rec.currency_id = rec.order_id.currency_id if rec.order_id else self.env.company.currency_id
+```
+
+### 明细行 onchange 注意事项 ⚠️
+
+**Many2one 字段赋值前必须检查空值**：
+
+```python
+# ❌ 错误 - 产品未设置单位时会报错
+@api.onchange('product_id')
+def _onchange_product(self):
+    if self.product_id:
+        self.uom_id = self.product_id.unit_id  # 可能为 False/None
+
+# ✅ 正确 - 添加空值检查
+@api.onchange('product_id')
+def _onchange_product(self):
+    if self.product_id:
+        self.uom_id = self.product_id.unit_id if self.product_id.unit_id else False
+```
+
+### One2many 视图注意事项
+
+**不要使用 `editable="bottom"` 属性**，可能导致添加行时报错。
+
+### Many2one 下拉选项优化
+
+为方便用户使用，添加 `can_create` 和 `can_write` 属性：
+
+```xml
+<field name="customer_id" can_create="True" can_write="True"/>
+<field name="product_id" can_create="True" can_write="True"/>
 ```
 
 ## 开发工作流
