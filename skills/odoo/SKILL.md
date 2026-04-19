@@ -1,243 +1,294 @@
 ---
 name: odoo
-description: Use when developing Odoo modules (any version 14.0-19.0), creating ERP extensions, debugging issues, or working with OWL components
+description: Use when developing Odoo modules (versions 14.0-19.0, primary target 18.0) - provides module scaffolding, manifest templates, view patterns, security setup, OWL 2.0 frontend development, and debugging guidance
 ---
 
 # Odoo Development Skill
 
-A comprehensive Odoo development reference covering versions 14.0-19.0, including module development, debugging, API patterns, and best practices.
+**IMPORTANT: This skill is automatically loaded for ALL Odoo module development tasks.**
 
-## Version Support
+**Skill Source**: https://github.com/atakhadiviom/odoo-skill
 
-| Odoo Version | Python | PostgreSQL | LTS | Status |
-|--------------|--------|------------|-----|--------|
+A comprehensive Odoo development reference covering module scaffolding, bug fixing, API patterns, and best practices for Odoo 14.0-19.0 (primary: 18.0-19.0).
+
+## Key Discoveries from Production (Odoo 18.0)
+
+### CRITICAL Odoo 18.0 Changes:
+
+1. **View XML must use `<list>` tag** - Odoo 18 renamed `<tree>` to `<list>`
+2. **Don't use `<field name="type">` in view records** - type is auto-inferred from arch content
+3. **license field is required** (Odoo 17+)
+4. **menu ID must include module prefix** - e.g., `module_name.menu_xxx`
+5. **access CSV format** - model_id:id format: `model_<module_name>_<model_name>`
+6. **tracking=True removed** - In Odoo 18, tracking is no longer a field parameter (use `_track` method instead if needed)
+7. **view_mode uses `list` not `tree`** - In act_window, use `view_mode="list,form"` not `view_mode="tree,form"`
+
+## Overview
+
+This skill provides Odoo-specific development guidance including:
+- OWL 2.0 frontend framework patterns (Odoo 19.0)
+- Python 3.11+ compatibility
+- PostgreSQL 15+ considerations
+- New field widgets and components
+- Enhanced API patterns
+- Testing and debugging strategies
+- Module scaffolding and specification workflows
+- XML-RPC batch import optimization
+- Dashboard and graph views
+- Scheduled cron jobs
+
+## Odoo Version Quick Reference
+
+| Version | Python | PostgreSQL | LTS | Status |
+|---------|--------|------------|-----|--------|
 | 14.0 | 3.8 | 12 | No | Maintenance |
 | 15.0 | 3.9 | 13 | No | Maintenance |
 | 16.0 | 3.10 | 14 | No | Maintenance |
-| 17.0 | 3.10 | 14 | Yes | LTS until 2034 |
-| **18.0** | **3.11** | **15** | **No** | **Stable** |
-| 19.0 | 3.11+ | 15+ | Yes | Latest LTS |
+| 17.0 | 3.10 | 14 | Yes | LTS until 2034-05 |
+| **18.0** | **3.11** | **15** | No | Stable (Current Target) |
+| **19.0** | **3.11+** | **15+** | **Yes** | **Latest LTS** |
 
-## Odoo 18.0+ 核心规范
-
-### 视图语法
-```xml
-<!-- Odoo 17+ 使用 list 替代 tree -->
-<list string="客户列表">
-    <field name="name"/>
-</list>
-```
-
-### 不使用的废弃功能
-- `<tree>` 标签（使用 `<list>`）
-- `mail.thread` 基类（除非明确需要）
-
-### 外部ID引用规则
-
-| 场景 | 正确格式 | 错误格式 |
-|------|----------|----------|
-| 同模块 action | `action="action_customer"` | `action="module.action_customer"` |
-| 同模块 menu | `parent="menu_parent"` | `parent="module.menu_parent"` |
-| 跨模块引用 | `action="other_module.action_id"` | `action="action_id"` |
-
-### 模块加载顺序规则（重要）
-
-**核心原则**: `ir.model.access.csv` 在视图加载模型之前就被处理，导致新模型权限找不到。
-
-**解决方案**: 将新模型的权限记录放到单独的 CSV 文件中，在 menus.xml 之后加载。
-
-## 模块结构模板
+## Module Structure
 
 ```
 module_name/
-├── __manifest__.py              # 模块清单（必需）
+├── __init__.py
+├── __manifest__.py
 ├── models/
-│   ├── __init__.py            # 模型入口（必需）
-│   └── your_model.py          # 模型定义
+│   ├── __init__.py
+│   └── main_model.py
 ├── views/
-│   ├── your_model_views.xml   # 视图定义
-│   └── menus.xml              # 菜单（最后加载）
-├── data/
-│   └── demo.xml               # 演示数据
+│   └── main_model_views.xml
 ├── security/
-│   ├── ir.model.access.csv    # 已有模型权限
-│   └── ir.model.access.new.csv # 新模型权限（后加载）
-└── static/
-    └── description/
-        └── icon.png           # 模块图标
+│   ├── ir.model.access.csv
+│   └── security_rules.xml
+├── static/
+│   ├── src/
+│   │   └── components/
+│   │       └── my_component/
+│   │           ├── my_component.js
+│   │           ├── my_component.xml
+│   │           └── my_component.scss
+│   └── description/
+│       ├── icon.png
+│       └── index.html
+└── i18n/
+    └── module_name.pot
 ```
 
-## `__manifest__.py` 正确结构
+## Manifest Template (__manifest__.py)
 
 ```python
 {
     'name': 'My Odoo Module',
     'version': '18.0.1.0.0',
-    'category': 'Industry',
-    'author': 'Your Company',
+    'category': 'Quality',
+    'summary': 'Brief description',
+    'description': """
+        Long description
+    """,
+    'author': 'Guangdong Jufeng',
+    'website': '',
     'license': 'LGPL-3',
-    'depends': ['base'],
-    'data': [
-        # 已有模型权限
-        'security/ir.model.access.csv',
-        'security/security.xml',
-        # 数据文件
-        'data/demo.xml',
-        # 视图文件按依赖顺序
-        'views/parent_views.xml',
-        'views/child_views.xml',
-        # 菜单必须最后加载
-        'views/menus.xml',
-        # 新模型权限必须放在 menus.xml 之后
-        'security/ir.model.access.new.csv',
+    'depends': [
+        'base',
+        'mail',
     ],
+    'data': [
+        'security/security_rules.xml',
+        'security/ir.model.access.csv',
+        'views/main_model_views.xml',
+        'views/menus.xml',
+    ],
+    'assets': {
+        'web.assets_backend': [
+            'module_name/static/src/components/**/*.js',
+            'module_name/static/src/**/*.xml',
+        ],
+    },
     'demo': [
-        'data/demo.xml',
+        'demo/demo_data.xml',
     ],
     'installable': True,
     'application': True,
+    'auto_install': False,
 }
 ```
 
-## 新增模型权限文件
-
-如果模块已有权限 CSV，新增模型时创建新文件：
-
-**security/ir.model.access.new.csv**:
-```csv
-id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
-access_your_new_model_user,your.new.model.user,model_your_new_model,base.group_user,1,1,1,1
-```
-
-**错误做法**: 直接在原 ir.model.access.csv 中添加，会导致 "Missing required value for the field 'Model'" 错误。
-
-## 模型定义模板
+## Model Development Pattern
 
 ```python
 from odoo import models, fields, api, _
-from odoo.exceptions import ValidationError
+from odoo.exceptions import ValidationError, UserError
 
-class ModelName(models.Model):
-    _name = 'module.name'
-    _description = '模型描述'
-    _order = 'name'
+class MainModel(models.Model):
+    _name = 'module_name.main_model'
+    _description = 'Main Model Description'
+    _inherit = ['mail.thread', 'mail.activity.mixin']
+    _order = 'name desc'
 
-    name = fields.Char(string='名称', required=True, index=True)
-    code = fields.Char(string='编码', index=True)
-    active = fields.Boolean(string='启用', default=True)
-    
-    # 关系字段
-    partner_id = fields.Many2one('res.partner', string='合作伙伴')
-    line_ids = fields.One2many('module.line', 'main_id', string='明细')
-    
-    # 计算字段
+    name = fields.Char(
+        string='Reference',
+        required=True,
+        copy=False,
+        readonly=True,
+        index=True,
+        default=lambda self: self._get_default_name()
+    )
+
+    state = fields.Selection([
+        ('draft', 'Draft'),
+        ('confirmed', 'Confirmed'),
+        ('done', 'Done'),
+        ('cancelled', 'Cancelled'),
+    ], string='Status', default='draft', tracking=True)
+
+    partner_id = fields.Many2one(
+        'res.partner',
+        string='Partner',
+        required=True,
+        tracking=True,
+    )
+
+    line_ids = fields.One2many(
+        'module_name.line_model',
+        'main_id',
+        string='Lines',
+    )
+
     total_amount = fields.Monetary(
-        string='总金额',
-        compute='_compute_total',
+        string='Total Amount',
+        compute='_compute_total_amount',
         store=True,
         currency_field='currency_id',
     )
-    currency_id = fields.Many2one('res.currency', string='货币',
-        default=lambda self: self.env.company.currency_id)
-    
-    # SQL 约束
-    _sql_constraints = [
-        ('code_unique', 'unique(code)', '编码不能重复!'),
-    ]
+
+    currency_id = fields.Many2one(
+        'res.currency',
+        string='Currency',
+        required=True,
+        default=lambda self: self.env.company.currency_id,
+    )
+
+    company_id = fields.Many2one(
+        'res.company',
+        string='Company',
+        required=True,
+        default=lambda self: self.env.company,
+        index=True,
+    )
 
     @api.depends('line_ids.amount')
-    def _compute_total(self):
-        for rec in self:
-            rec.total_amount = sum(rec.line_ids.mapped('amount'))
+    def _compute_total_amount(self):
+        for record in self:
+            record.total_amount = sum(record.line_ids.mapped('amount'))
 
-    @api.constrains('code')
-    def _check_code(self):
-        for rec in self:
-            if rec.code and len(rec.code) < 3:
-                raise ValidationError(_('编码长度不能少于3位'))
+    @api.constrains('partner_id', 'company_id')
+    def _check_partner_company(self):
+        for record in self:
+            if record.partner_id.company_id and record.partner_id.company_id != record.company_id:
+                raise ValidationError(_('Partner must belong to the same company.'))
+
+    @api.model
+    def create(self, vals):
+        if vals.get('name', _('New')) == _('New'):
+            vals['name'] = self.env['ir.sequence'].next_by_code(self._name) or _('New')
+        return super().create(vals)
 
     def action_confirm(self):
         self.write({'state': 'confirmed'})
         return True
 ```
 
-## 视图定义模板
+## View Development (Odoo 18.0)
 
-### 列表视图
-```xml
-<record id="view_your_model_tree" model="ir.ui.view">
-    <field name="name">your.model.list</field>
-    <field name="model">your.model</field>
-    <field name="arch" type="xml">
-        <list>
-            <field name="name"/>
-            <field name="code"/>
-            <field name="state"/>
-            <field name="active"/>
-        </list>
-    </field>
-</record>
-```
+### Form View
 
-### 表单视图
 ```xml
-<record id="view_your_model_form" model="ir.ui.view">
-    <field name="name">your.model.form</field>
-    <field name="model">your.model</field>
+<record id="view_main_model_form" model="ir.ui.view">
+    <field name="name">main.model.form</field>
+    <field name="model">module_name.main_model</field>
     <field name="arch" type="xml">
-        <form>
+        <form string="Main Model">
             <header>
-                <button name="action_confirm" type="object" string="确认" class="btn-primary"/>
-                <field name="state" widget="statusbar"/>
+                <button name="action_confirm" type="object" string="Confirm" 
+                        class="btn-primary" invisible="state != 'draft'"/>
+                <field name="state" widget="statusbar" 
+                       statusbar_visible="draft,confirmed,done"/>
             </header>
             <sheet>
+                <div class="oe_title">
+                    <label for="name" string="Reference"/>
+                    <field name="name" class="oe_inline"/>
+                </div>
                 <group>
-                    <group string="基本信息">
-                        <field name="name"/>
-                        <field name="code"/>
+                    <group>
+                        <field name="partner_id"/>
+                        <field name="date"/>
                     </group>
-                    <group string="设置">
-                        <field name="active"/>
+                    <group>
+                        <field name="company_id" groups="base.group_multi_company"/>
+                        <field name="total_amount" widget="monetary"/>
                     </group>
                 </group>
                 <notebook>
-                    <page string="明细" name="lines">
-                        <field name="line_ids"/>
-                    </page>
-                    <page string="备注" name="remark">
-                        <field name="remark"/>
+                    <page string="Lines" name="lines">
+                        <field name="line_ids">
+                            <tree editable="bottom">
+                                <field name="product_id"/>
+                                <field name="quantity"/>
+                                <field name="amount" widget="monetary" sum="Total"/>
+                            </tree>
+                        </field>
                     </page>
                 </notebook>
             </sheet>
+            <div class="oe_chatter">
+                <field name="message_follower_ids"/>
+                <field name="message_ids"/>
+                <field name="activity_ids"/>
+            </div>
         </form>
     </field>
 </record>
 ```
 
-### 操作（Window Action）
+### Menu and Action (IMPORTANT: Use module prefix!)
+
 ```xml
-<record id="action_your_model" model="ir.actions.act_window">
-    <field name="name">菜单显示名称</field>
-    <field name="res_model">your.model</field>
-    <field name="view_mode">list,form</field>
-</record>
+<odoo>
+    <!-- Define action BEFORE menuitem -->
+    <record id="action_main_model" model="ir.actions.act_window">
+        <field name="name">Main Model</field>
+        <field name="res_model">module_name.main_model</field>
+        <field name="view_mode">tree,form</field>
+    </record>
+
+    <!-- Menu items - USE module prefix in action! -->
+    <menuitem id="menu_root" name="Module" sequence="100"/>
+    <menuitem id="menu_main" name="Main" parent="menu_root" 
+              action="module_name.action_main_model"/>
+</odoo>
 ```
 
-### 菜单
-```xml
-<menuitem id="menu_parent" name="父菜单"/>
-<menuitem id="menu_your_model" 
-          name="菜单名称"
-          parent="menu_parent"
-          action="action_your_model"
-          sequence="10"/>
+**CRITICAL: When menuitem references an action, use the FULL external ID with module prefix:**
+- Correct: `action="module_name.action_main_model"`
+- Wrong: `action="action_main_model"` (will cause "External ID not found" error)
+
+## Security (ir.model.access.csv)
+
+```csv
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_main_model_user,main.model.user,model_module_name_main_model,base.group_user,1,1,1,0
+access_main_model_manager,main.model.manager,model_module_name_main_model,base.group_system,1,1,1,1
+access_line_model_user,line.model.user,model_module_name_line_model,base.group_user,1,1,1,0
 ```
 
-## OWL 2.0 前端开发 (Odoo 19.0)
+## OWL 2.0 Frontend (Odoo 19.0)
 
 ```javascript
 /** @odoo-module **/
-import { Component, useState, onMounted } from "@odoo/owl";
+import { Component, useState, onWillStart } from "@odoo/owl";
 import { useService } from "@web/core/utils/hooks";
 
 export class MyComponent extends Component {
@@ -249,173 +300,160 @@ export class MyComponent extends Component {
     setup() {
         this.orm = useService("orm");
         this.notification = useService("notification");
-        this.state = useState({
-            data: [],
-            isLoading: false,
-        });
-    }
-
-    async onWillStart() {
-        await this.loadData();
+        this.state = useState({ data: [] });
+        onWillStart(() => this.loadData());
     }
 
     async loadData() {
-        this.state.isLoading = true;
-        try {
-            this.state.data = await this.orm.searchRead(
-                this.props.record.resModel,
-                [['id', '=', this.props.record.resId]],
-                ['name', 'state']
-            );
-        } finally {
-            this.state.isLoading = false;
-        }
+        this.state.data = await this.orm.searchRead(
+            this.props.record.resModel,
+            [['id', '=', this.props.record.resId]],
+            ['name', 'state']
+        );
     }
 }
 ```
 
-## 常见问题与解决方案
-
-### 问题1: 模型未注册
-**症状**: 模型定义存在但 Odoo 找不到
-**原因**: 对应目录缺少 `__init__.py`
-**解决**: 创建 `models/subdir/__init__.py`
-
-### 问题2: ir.model.access.csv 模型找不到 ⚠️
-**症状**: 
-```
-Missing required value for the field 'Model' (model_id)
-在字段 'Model' 中没找到匹配的记录 外部ID 'model_your_new_model'
-```
-**原因**: `ir.model.access.csv` 在模型注册之前就被加载
-**解决**: 
-1. 创建单独的 CSV 文件 `security/ir.model.access.new.csv`
-2. 在 `__manifest__.py` 中将此文件放在 `menus.xml` 之后
-
-### 问题3: 菜单点击报错 action 不存在
-**症状**: "Record does not exist or has been deleted"
-**原因1**: `menus.xml` 加载顺序过早
-**解决**: 在 `__manifest__.py` 中将 `menus.xml` 移到视图文件之后
-**原因2**: action ID 引用格式错误
-**解决**: 同模块引用不加模块前缀
-
-### 问题4: 视图加载失败
-**症状**: 视图页面空白或报错
-**原因**: XML 语法错误或字段名错误
-**解决**: 
-1. 检查 XML 语法
-2. 确认字段在模型中存在
-3. 查看 Odoo 日志
-
-## Firebird 数据库集成
+## Testing
 
 ```python
-import fdb
+from odoo.tests.common import TransactionCase
+from odoo.exceptions import ValidationError
 
-def import_from_firebird(self):
-    fb_con = fdb.connect(
-        host='localhost',
-        database='/path/to/database.fdb',
-        user='sysdba',
-        password='masterkey'
-    )
-    cursor = fb_con.cursor()
-    
-    cursor.execute("SELECT * FROM CUSTOMERS")
-    
-    for row in cursor:
-        self.env['your.model'].create({
-            'name': row[0],
-            'code': row[1],
-        })
-    
-    fb_con.close()
+class TestMainModel(TransactionCase):
+
+    def setUp(self):
+        super().setUp()
+        self.Model = self.env['module_name.main_model']
+        self.partner = self.env.ref('base.res_partner_1')
+
+    def test_create_record(self):
+        record = self.Model.create({'partner_id': self.partner.id})
+        self.assertTrue(record.name)
+        self.assertEqual(record.state, 'draft')
+
+    def test_state_transitions(self):
+        record = self.Model.create({'partner_id': self.partner.id})
+        record.action_confirm()
+        self.assertEqual(record.state, 'confirmed')
+
+    def test_constraints(self):
+        with self.assertRaises(ValidationError):
+            # validation code here
+            pass
 ```
 
-## 本地开发路径
+## Common Patterns
 
+### onchange Pattern
+```python
+@api.onchange('partner_id')
+def _onchange_partner_id(self):
+    if self.partner_id:
+        self.currency_id = self.partner_id.property_purchase_currency_id
 ```
-Odoo 18.0 绿色版: D:\GOdoo18_CE_20250305
-开发源目录: D:\纸箱ERP功能模块\architecture-a-single-module
-模块名: l10n_cn_carton_erp
+
+### Multi-Company Default
+```python
+company_id = fields.Many2one(
+    'res.company',
+    string='Company',
+    default=lambda self: self.env.company,
+)
 ```
 
-## 纸箱ERP模块开发规范
+## Debugging Tips
 
-### 模块基本信息
+```python
+# Add breakpoint
+import pdb; pdb.set_trace()
+
+# Logging
+import logging
+_logger = logging.getLogger(__name__)
+_logger.info('Debug: %s', value)
+```
+
+## Common Errors and Fixes (Odoo 18.0)
+
+### 1. View type field error and tree tag
+**Error:** `Wrong value for ir.ui.view.type: 'tree'`
+
+**Cause:** In Odoo 18:
+- DON'T use `<field name="type">tree</field>` in view records
+- Use `<list>` tag instead of `<tree>` tag
+
+**Fix:** 
+```xml
+<!-- WRONG (Odoo 17 and below) -->
+<record id="view_xxx" model="ir.ui.view">
+    <field name="type">tree</field>
+    <field name="arch" type="xml">
+        <tree>...</tree>
+    </field>
+</record>
+
+<!-- CORRECT for Odoo 18 -->
+<record id="view_xxx" model="ir.ui.view">
+    <field name="arch" type="xml">
+        <list>...</list>
+    </field>
+</record>
+```
+
+**IMPORTANT:** Odoo 18 renamed `<tree>` to `<list>` for list views!
+
+### 2. License field required
+**Error:** Missing license in manifest
+
+**Cause:** Odoo 17+ requires license field
+
+**Fix:** Always include license:
 ```python
 {
-    'name': 'Carton ERP - All-in-One',
-    'name zh_CN': '纸箱ERP全业务模块(单一)',
-    'version': '1.0.0',
-    'category': 'Industry',
-    'author': '老天@odoo123.com,开源之家',
-    'website': 'https://www.odoo123.com',
-    'license': 'LGPL-3',
+    'license': 'LGPL-3',  # Required in Odoo 17+
 }
 ```
 
-### 明细行模型注意事项 ⚠️
+### 3. Menu ID conflicts
+**Error:** External ID not found
 
-**避免使用 related 字段获取父记录字段**，因为 new record 时会返回 `_unknown` 对象：
+**Cause:** menuitem action must use full external ID with module prefix
 
-```python
-# ❌ 错误 - 会导致 _unknown 错误
-currency_id = fields.Many2one('res.currency', related='order_id.currency_id')
-
-# ✅ 正确 - 使用 compute 字段
-currency_id = fields.Many2one('res.currency', compute='_compute_currency', store=True)
-
-@api.depends('order_id.currency_id')
-def _compute_currency(self):
-    for rec in self:
-        rec.currency_id = rec.order_id.currency_id if rec.order_id else self.env.company.currency_id
-```
-
-### 明细行 onchange 注意事项 ⚠️
-
-**Many2one 字段赋值前必须检查空值**：
-
-```python
-# ❌ 错误 - 产品未设置单位时会报错
-@api.onchange('product_id')
-def _onchange_product(self):
-    if self.product_id:
-        self.uom_id = self.product_id.unit_id  # 可能为 False/None
-
-# ✅ 正确 - 添加空值检查
-@api.onchange('product_id')
-def _onchange_product(self):
-    if self.product_id:
-        self.uom_id = self.product_id.unit_id if self.product_id.unit_id else False
-```
-
-### One2many 视图注意事项
-
-**不要使用 `editable="bottom"` 属性**，可能导致添加行时报错。
-
-### Many2one 下拉选项优化
-
-为方便用户使用，添加 `can_create` 和 `can_write` 属性：
-
+**Fix:** Use module prefix:
 ```xml
-<field name="customer_id" can_create="True" can_write="True"/>
-<field name="product_id" can_create="True" can_write="True"/>
+<!-- WRONG -->
+<menuitem id="menu_main" action="action_main_model"/>
+
+<!-- CORRECT -->
+<menuitem id="module_name.menu_main" action="module_name.action_main_model"/>
 ```
 
-## 开发工作流
+### 4. Model name in access.csv
+**Error:** Permission error
 
-1. **创建模型** → `models/ps_basic/*.py`
-2. **创建视图** → `views/ps_basic_*_views.xml`
-3. **更新 __init__.py** → 添加新模型导入
-4. **添加权限** → 创建 `security/ir.model.access.new.csv`
-5. **更新 manifest** → 添加视图文件和新权限文件
-6. **更新 menus.xml** → 添加新菜单项
-7. **添加演示数据** → `data/demo.xml`
-8. **同步到 Odoo** → `copy_modules_to_odoo.ps1`
-9. **升级模块** → Settings → Apps → Upgrade
+**Cause:** model_id:id must match format `model_<module_name>_<model>`
 
-## 相关 Skills
+**Fix:** Use correct pattern:
+```csv
+id,name,model_id:id,group_id:id,perm_read,perm_write,perm_create,perm_unlink
+access_xxx,xxx,model_module_name_model,base.group_user,1,1,1,0
+```
 
-- **superpowers:verification-before-completion** - 验证完成前必须执行验证
-- **superpowers:systematic-debugging** - 系统性调试问题
+## Migration Notes: 18.0 to 19.0
+
+1. **OWL 2.0**: Convert OWL 1.x to OWL 2.0 syntax
+2. **Python 3.11+**: Required
+3. **New Widgets**: ai_text_assistant, rich_text_content
+4. **Asset Loading**: Use module-based asset loading
+
+## References
+
+- [Odoo Documentation](https://www.odoo.com/documentation/18.0/)
+- [Odoo Developer](https://www.odoo.com/documentation/18.0/developer.html)
+- [OWL Documentation](https://github.com/odoo/owl)
+
+---
+
+**Skill Source**: https://github.com/atakhadiviom/odoo-skill
+**Last Updated**: 2026-04-11
