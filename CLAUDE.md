@@ -1,5 +1,11 @@
 # Superpowers — Contributor Guidelines
 
+## 用户偏好 / User Preferences
+
+**语言设置 (Language):** 永远对我说中文 (Always respond in Chinese)
+
+---
+
 ## If You Are an AI Agent
 
 Stop. Read this section before doing anything.
