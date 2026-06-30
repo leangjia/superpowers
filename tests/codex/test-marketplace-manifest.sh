@@ -51,6 +51,28 @@ if not plugin_manifest.exists():
 
 manifest = json.loads(plugin_manifest.read_text(encoding="utf-8"))
 assert_equal(manifest.get("name"), plugin.get("name"), "plugin manifest name")
+supported_categories = {
+    "Productivity",
+    "Creativity",
+    "Developer Tools",
+    "Business & Operations",
+    "Data & Analytics",
+    "Communication",
+    "Education & Research",
+    "Security",
+    "Finance",
+    "Healthcare",
+    "Travel",
+    "Entertainment",
+    "Other",
+}
+manifest_category = manifest.get("interface", {}).get("category")
+if manifest_category not in supported_categories:
+    raise AssertionError(
+        f"plugin manifest category: expected one of {sorted(supported_categories)!r}, "
+        f"got {manifest_category!r}"
+    )
+assert_equal(manifest_category, plugin.get("category"), "plugin manifest category")
 assert_equal(
     manifest.get("hooks"),
     None,
